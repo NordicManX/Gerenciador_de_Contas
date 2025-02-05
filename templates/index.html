@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador de Contas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.1/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gray-100 flex flex-col items-center p-6">
+
+    <h1 class="text-2xl font-bold mb-4 text-center sm:text-3xl md:text-4xl">Gerenciador de Contas</h1>
+
+    <!-- Definir Salário -->
+    <div class="mb-4 w-full max-w-xs sm:max-w-sm">
+        <input id="salario" type="number" placeholder="Digite seu salário" class="border p-2 rounded w-full">
+        <button onclick="definirSalario()" class="bg-blue-500 text-white px-4 py-2 rounded w-full mt-2 sm:w-auto">Definir Salário</button>
+    </div>
+
+    <!-- Exibir Saldo Atual -->
+    <p id="saldo" class="font-bold text-green-600 hidden text-center sm:text-lg md:text-xl"></p>
+
+    <!-- Adicionar Conta -->
+    <div id="contas-container" class="hidden w-full max-w-xs sm:max-w-sm mt-4">
+        <input id="descricao" type="text" placeholder="Descrição" class="border p-2 rounded w-full mb-2">
+        <input id="valor" type="number" placeholder="Valor" class="border p-2 rounded w-full mb-2">
+        <button onclick="adicionarConta()" class="bg-green-500 text-white px-4 py-2 rounded w-full">Adicionar Conta</button>
+    </div>
+
+    <!-- Lista de Contas -->
+    <div class="mt-4 w-full max-w-xl">
+        <h2 class="text-lg font-bold text-center sm:text-xl">Lista de Contas</h2>
+        <ul id="lista-contas" class="mt-2"></ul>
+        <p id="total-contas" class="font-bold mt-2 text-blue-600 text-center">Total das Contas: R$ 0,00</p>
+        <button onclick="baixarExcel()" class="bg-gray-500 text-white px-4 py-2 rounded mt-4 w-full sm:w-auto">Baixar Contas em Excel</button>
+    </div>
+
+    <script>
+        async function definirSalario() {
+            const salario = parseFloat(document.getElementById("salario").value);
+
+            if (isNaN(salario) || salario <= 0) {
+                alert("Por favor, insira um valor válido para o salário.");
+                return;
+            }
+
+            const response = await fetch("/definir-salario", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ salario })
+            });
+
+            const data = await response.json();
+            if (data.status === "success") {
+                carregarContas();
+                document.getElementById("contas-container").classList.remove("hidden");
+            } else {
+                alert("Erro ao definir o salário!");
+            }
+        }
+
+        async function adicionarConta() {
+            const descricao = document.getElementById("descricao").value;
+            const valor = parseFloat(document.getElementById("valor").value);
+
+            if (!descricao || isNaN(valor) || valor <= 0) {
+                alert("Preencha todos os campos corretamente!");
+                return;
+            }
+
+            await fetch("/adicionar", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ descricao, valor })
+            });
+
+            document.getElementById("descricao").value = "";
+            document.getElementById("valor").value = "";
+
+            carregarContas();
+        }
+
+        async function carregarContas() {
+            const response = await fetch("/listar");
+            const data = await response.json();
+
+            document.getElementById("saldo").textContent = `Saldo disponível: R$ ${data.saldo.toFixed(2)}`;
+            document.getElementById("saldo").classList.remove("hidden");
+
+            const lista = document.getElementById("lista-contas");
+            lista.innerHTML = "";
+
+            let totalContas = 0;
+
+            data.contas.forEach((conta, index) => {
+                totalContas += conta.valor;
+                lista.innerHTML += `
+                    <li class="flex justify-between bg-gray-200 p-2 rounded-lg mt-2">
+                        ${conta.descricao}: R$ ${conta.valor.toFixed(2)}
+                        <div>
+                            <button onclick="editarConta(${index})" class="bg-yellow-500 text-white px-2 py-1 rounded">✏️</button>
+                            <button onclick="removerConta(${index})" class="bg-red-500 text-white px-2 py-1 rounded">🗑️</button>
+                        </div>
+                    </li>
+                `;
+            });
+
+            document.getElementById("total-contas").textContent = `Total das Contas: R$ ${totalContas.toFixed(2)}`;
+        }
+
+        async function removerConta(index) {
+            await fetch("/remover", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ index })
+            });
+
+            carregarContas();
+        }
+
+        async function editarConta(index) {
+            const novaDescricao = prompt("Nova descrição da conta:");
+            const novoValor = parseFloat(prompt("Novo valor da conta:"));
+
+            if (!novaDescricao || isNaN(novoValor) || novoValor <= 0) {
+                alert("Preencha os valores corretamente!");
+                return;
+            }
+
+            await fetch("/editar", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ index, descricao: novaDescricao, valor: novoValor })
+            });
+
+            carregarContas();
+        }
+
+        function baixarExcel() {
+            fetch("/listar")
+                .then(response => response.json())
+                .then(data => {
+                    const contas = data.contas;
+                    const wsData = [
+                        ["Descrição", "Valor"], // Cabeçalhos
+                        ...contas.map(conta => [conta.descricao, conta.valor.toFixed(2)])
+                    ];
+
+                    const ws = XLSX.utils.aoa_to_sheet(wsData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Contas");
+
+                    // Gerar arquivo Excel
+                    XLSX.writeFile(wb, "contas.xlsx");
+                })
+                .catch(err => {
+                    alert("Erro ao gerar o arquivo Excel!");
+                    console.error(err);
+                });
+        }
+
+        window.onload = carregarContas;
+    </script>
+</body>
+
+</html>
