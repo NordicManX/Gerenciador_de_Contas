@@ -29,7 +29,7 @@ Clone este repositório para o seu computador e instale as dependências necess�
 
 ```bash
 git clone https://github.com/seu-usuario/gerenciador-contas.git
-
+```
 
 
 
