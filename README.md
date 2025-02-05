@@ -33,5 +33,5 @@ git clone https://github.com/seu-usuario/gerenciador-contas.git
 
 
 
-By Nelson Carvalho(nordicmanx)
+#### By Nelson Carvalho(nordicmanx)
 
